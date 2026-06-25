@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ============================================================
-//  CONFIGURATION
-//  Set BACKEND_URL to your deployed server to use the real API.
-//  Leave null to use the built-in mock backend (default).
-//  e.g. const BACKEND_URL = "https://transact-rank.up.railway.app";
+//  CONFIGURATION — three ways to set the backend URL:
+//  1. Paste it into the ⚙ Settings panel at runtime (saved to localStorage)
+//  2. Set VITE_BACKEND_URL env var at Netlify/Vercel build time
+//  3. Leave everything as-is → built-in mock backend runs with demo data
 // ============================================================
-const BACKEND_URL = null;
+function getBackendUrl() {
+  try { return localStorage.getItem("transact_rank_url") || null; } catch { return null; }
+}
 
 const DEMO_USERS = ["diana", "alice", "bob", "charlie", "evan"];
 const CATEGORIES = ["salary", "food", "transport", "entertainment", "utilities", "shopping", "other"];
@@ -134,29 +136,46 @@ function mockGetRankings() {
   }, 300));
 }
 
-// Real-backend adapter (used when BACKEND_URL is set)
-async function realPost(data) {
-  const r = await fetch(`${BACKEND_URL}/transaction`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
-  const json = await r.json();
-  if (!r.ok) throw { status: r.status, message: json.detail || "Request failed" };
-  return json;
+// ─── Real-backend adapters ────────────────────────────────────────────────────
+// The Python API uses ISO-string timestamps; the mock uses ms numbers.
+// These adapters normalise both into the `ts` / `last_ts` fields the UI expects.
+function normTxn(t) {
+  return { ...t, ts: t.ts ?? new Date(t.timestamp).getTime() };
 }
-async function realGetSummary(uid) {
-  const r = await fetch(`${BACKEND_URL}/summary/${uid}`);
+function normRank(r) {
+  return { ...r, last_ts: r.last_ts ?? new Date(r.last_active).getTime() };
+}
+async function realPost(url, data) {
+  const r = await fetch(`${url}/transaction`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data)
+  });
+  const json = await r.json();
+  if (!r.ok) throw { status: r.status, message: Array.isArray(json.detail) ? json.detail.map(e => e.msg).join("; ") : (json.detail || "Request failed") };
+  return normTxn(json);
+}
+async function realGetSummary(url, uid) {
+  const r = await fetch(`${url}/summary/${uid}`);
   const json = await r.json();
   if (!r.ok) throw { status: r.status, message: json.detail || "Not found" };
-  return json;
+  return { ...json, transactions: json.transactions.map(normTxn) };
 }
-async function realGetRankings() {
-  const r = await fetch(`${BACKEND_URL}/ranking`);
-  return r.json();
+async function realGetRankings(url) {
+  const r = await fetch(`${url}/ranking`);
+  const json = await r.json();
+  if (!r.ok) throw { status: r.status, message: "Failed to fetch rankings" };
+  return { ...json, rankings: json.rankings.map(normRank) };
 }
 
-const api = {
-  postTransaction: BACKEND_URL ? realPost : mockPost,
-  getSummary: BACKEND_URL ? realGetSummary : mockGetSummary,
-  getRankings: BACKEND_URL ? realGetRankings : mockGetRankings,
-};
+// api is a function so it re-evaluates BACKEND_URL on every call
+// (picks up URL after user saves it in Settings)
+function api() {
+  const url = getBackendUrl();
+  return {
+    postTransaction: url ? realPost.bind(null, url) : mockPost,
+    getSummary:      url ? realGetSummary.bind(null, url) : mockGetSummary,
+    getRankings:     url ? realGetRankings.bind(null, url) : mockGetRankings,
+  };
+}
 
 // ============================================================
 //  UTILITIES
@@ -193,13 +212,25 @@ export default function App() {
   const [rankLoading, setRankLoading] = useState(false);
 
   const [toast, setToast] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [urlInput, setUrlInput] = useState(() => { try { return localStorage.getItem("transact_rank_url") || ""; } catch { return ""; } });
+  const [liveUrl, setLiveUrl] = useState(getBackendUrl);
+
+  const saveUrl = () => {
+    const trimmed = urlInput.trim().replace(/\/$/, "");
+    try { if (trimmed) localStorage.setItem("transact_rank_url", trimmed); else localStorage.removeItem("transact_rank_url"); } catch {}
+    setLiveUrl(trimmed || null);
+    setShowSettings(false);
+    showToast("ok", trimmed ? `Connected to ${trimmed}` : "Switched to mock backend");
+  };
+
   const showToast = useCallback((type, msg) => { setToast({ type, msg }); setTimeout(() => setToast(null), 4500); }, []);
 
   const submitTx = useCallback(async (overrideId) => {
     if (txLoading) return;
     setTxLoading(true); setTxResult(null);
     try {
-      const res = await api.postTransaction({ ...form, ...(overrideId ? { transaction_id: overrideId } : {}) });
+      const res = await api().postTransaction({ ...form, ...(overrideId ? { transaction_id: overrideId } : {}) });
       setTxResult({ ok: true, data: res });
       setRecent(p => [res, ...p].slice(0, 6));
       setLastId(res.transaction_id);
@@ -215,14 +246,14 @@ export default function App() {
     const id = (uid || summaryUID).trim();
     if (!id) return;
     setSummaryLoading(true); setSummaryErr(null); setSummary(null);
-    try { setSummary(await api.getSummary(id)); }
+    try { setSummary(await api().getSummary(id)); }
     catch (e) { setSummaryErr(e.message || "User not found"); }
     finally { setSummaryLoading(false); }
   }, [summaryUID]);
 
   const fetchRankings = useCallback(async () => {
     setRankLoading(true);
-    try { setRankings(await api.getRankings()); } finally { setRankLoading(false); }
+    try { setRankings(await api().getRankings()); } finally { setRankLoading(false); }
   }, []);
 
   useEffect(() => { if (tab === "rank") fetchRankings(); }, [tab, fetchRankings]);
@@ -255,14 +286,39 @@ export default function App() {
         </div>
       )}
 
+      {/* Settings modal */}
+      {showSettings && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={e => e.target === e.currentTarget && setShowSettings(false)}>
+          <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-secondary)", borderRadius: 14, padding: 28, width: 440, boxShadow: "0 24px 48px rgba(0,0,0,0.4)" }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 500, fontSize: 16 }}>Backend URL</p>
+            <p style={{ margin: "0 0 18px", fontSize: 13, color: "var(--color-text-secondary)" }}>
+              Paste your Render/Railway URL. Leave blank to use the built-in mock backend.
+            </p>
+            <input style={{ width: "100%", padding: "10px 14px", background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-secondary)", borderRadius: 8, color: "var(--color-text-primary)", fontSize: 14, outline: "none", boxSizing: "border-box", fontFamily: "var(--font-mono)" }}
+              value={urlInput} onChange={e => setUrlInput(e.target.value)}
+              placeholder="https://transact-rank-xxxx.onrender.com"
+              onKeyDown={e => e.key === "Enter" && saveUrl()} />
+            <div style={{ marginTop: 10, fontSize: 12, color: "var(--color-text-tertiary)" }}>
+              Current mode: <strong style={{ color: liveUrl ? "var(--color-text-success)" : "var(--color-text-info)" }}>{liveUrl ? `Live — ${liveUrl}` : "Mock backend"}</strong>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+              <button onClick={saveUrl} style={{ flex: 1, padding: "10px", background: "var(--color-background-info)", color: "var(--color-text-info)", border: "0.5px solid var(--color-border-info)", borderRadius: 8, fontWeight: 500, cursor: "pointer", fontSize: 13 }}>Save & connect</button>
+              <button onClick={() => setShowSettings(false)} style={{ padding: "10px 18px", background: "var(--color-background-secondary)", color: "var(--color-text-secondary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 8, fontWeight: 500, cursor: "pointer", fontSize: 13 }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ borderBottom: "0.5px solid var(--color-border-tertiary)", padding: "10px 24px" }}>
         <div style={{ maxWidth: 980, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 16, fontWeight: 500 }}>TransactRank</span>
-            <span style={{ background: "var(--color-background-secondary)", color: "var(--color-text-tertiary)", fontSize: 11, padding: "2px 9px", borderRadius: 20, fontWeight: 500 }}>
-              {BACKEND_URL ? "Live backend" : "Mock backend · 5 demo users pre-loaded"}
+            <span style={{ background: liveUrl ? "var(--color-background-success)" : "var(--color-background-secondary)", color: liveUrl ? "var(--color-text-success)" : "var(--color-text-tertiary)", fontSize: 11, padding: "2px 9px", borderRadius: 20, fontWeight: 500 }}>
+              {liveUrl ? "Live backend" : "Mock backend · 5 demo users pre-loaded"}
             </span>
+            <button onClick={() => setShowSettings(true)} title="Configure backend URL" style={{ background: "none", border: "0.5px solid var(--color-border-tertiary)", color: "var(--color-text-tertiary)", borderRadius: 6, padding: "3px 10px", cursor: "pointer", fontSize: 12 }}>⚙ Settings</button>
           </div>
           <div style={{ display: "flex", gap: 4 }}>
             {[["tx", "Submit transaction"], ["summary", "User summary"], ["rank", "Leaderboard"]].map(([id, lbl]) => (
