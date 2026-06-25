@@ -1,0 +1,19 @@
+# Render Blueprint — deploys the API + Postgres in one click.
+# Usage: render.com → New → Blueprint → select this repo → Create Blueprint
+
+services:
+  - type: web
+    name: transact-rank-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: transact-rank-db
+          property: connectionString
+
+databases:
+  - name: transact-rank-db
+    databaseName: transact_rank
+    plan: free

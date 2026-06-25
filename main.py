@@ -1,36 +1,39 @@
 """
-TransactRank – main FastAPI application.
-
-Run locally:
-    uvicorn app.main:app --reload
-
-Auto-generated docs:
-    http://localhost:8000/docs   (Swagger UI)
-    http://localhost:8000/redoc  (ReDoc)
+TransactRank – FastAPI application entry point.
+Tables are created automatically on first startup via the lifespan hook.
 """
 
 import time
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.database import Base, engine
 from app.routers import ranking, summary, transaction
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create tables if they don't exist (idempotent)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    await engine.dispose()
+
 
 app = FastAPI(
     title="TransactRank API",
     description=(
-        "Financial transaction service with multi-factor user ranking.\n\n"
-        "Highlights: idempotent transactions · per-user rate limiting · "
-        "safe concurrent balance updates · three-factor leaderboard."
+        "Financial transaction service with idempotent writes, "
+        "PostgreSQL-backed concurrency safety, and a multi-factor leaderboard."
     ),
-    version="1.0.0",
+    version="2.0.0",
+    lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
 )
 
-# ── CORS ──────────────────────────────────────────────────────────────────────
-# Allow all origins so the standalone frontend can reach the API.
-# Tighten this in production by listing specific origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -39,30 +42,26 @@ app.add_middleware(
 )
 
 
-# ── Middleware ─────────────────────────────────────────────────────────────────
 @app.middleware("http")
-async def add_timing_header(request: Request, call_next):
-    start = time.perf_counter()
+async def timing_header(request: Request, call_next):
+    t = time.perf_counter()
     response = await call_next(request)
-    elapsed = round(time.perf_counter() - start, 4)
-    response.headers["X-Process-Time"] = str(elapsed)
+    response.headers["X-Process-Time"] = f"{time.perf_counter() - t:.4f}"
     return response
 
 
-# ── Routers ────────────────────────────────────────────────────────────────────
 app.include_router(transaction.router)
 app.include_router(summary.router)
 app.include_router(ranking.router)
 
 
-# ── Utility endpoints ──────────────────────────────────────────────────────────
 @app.get("/", include_in_schema=False)
 async def root():
     return {
         "service": "TransactRank API",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "storage": "PostgreSQL",
         "docs": "/docs",
-        "endpoints": ["POST /transaction", "GET /summary/{user_id}", "GET /ranking"],
     }
 
 
