@@ -12,21 +12,39 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import DeclarativeBase
 
 
-def _build_url() -> str:
+import urllib.parse
+
+def _get_engine():
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         raise RuntimeError("DATABASE_URL environment variable is not set")
+    
     # Railway gives postgresql://, asyncpg needs postgresql+asyncpg://
-    return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    
+    parsed = urllib.parse.urlparse(url)
+    query_params = urllib.parse.parse_qs(parsed.query)
+    
+    connect_args = {}
+    if "sslmode" in query_params:
+        sslmode = query_params.pop("sslmode")[0]
+        if sslmode in ("require", "verify-ca", "verify-full"):
+            # asyncpg uses 'ssl' instead of 'sslmode'
+            connect_args["ssl"] = True
+            
+    new_query = urllib.parse.urlencode(query_params, doseq=True)
+    clean_url = urllib.parse.urlunparse(parsed._replace(query=new_query))
+    
+    return create_async_engine(
+        clean_url,
+        connect_args=connect_args,
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        echo=False,
+    )
 
-
-engine = create_async_engine(
-    _build_url(),
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,   # detect stale connections
-    echo=False,
-)
+engine = _get_engine()
 
 AsyncSessionLocal = async_sessionmaker(
     engine,
