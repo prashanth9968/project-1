@@ -1,7 +1,7 @@
 :root {
   --text: #6b6375;
   --text-h: #08060d;
-  --bg: #fff;
+  --bg: #fafafa;
   --border: #e5e4e7;
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
@@ -9,17 +9,43 @@
   --accent-border: rgba(170, 59, 255, 0.5);
   --social-bg: rgba(244, 243, 236, 0.5);
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(0, 0, 0, 0.05) 0 10px 15px -3px, rgba(0, 0, 0, 0.025) 0 4px 6px -2px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
 
+  /* Theme variables for TransactRank */
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f9fafb;
+  --color-border-secondary: #e5e7eb;
+  --color-border-tertiary: #f3f4f6;
+  
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-text-tertiary: #9ca3af;
+
+  --color-background-info: rgba(59, 130, 246, 0.08);
+  --color-border-info: #3b82f6;
+  --color-text-info: #1d4ed8;
+
+  --color-background-success: rgba(34, 197, 94, 0.08);
+  --color-border-success: #22c55e;
+  --color-text-success: #15803d;
+
+  --color-background-warning: rgba(234, 179, 8, 0.08);
+  --color-border-warning: #eab308;
+  --color-text-warning: #a16207;
+
+  --color-background-danger: rgba(239, 68, 68, 0.08);
+  --color-border-danger: #ef4444;
+  --color-text-danger: #b91c1c;
+
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  color: var(--color-text-primary);
+  background: var(--color-background-secondary);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -34,15 +60,41 @@
   :root {
     --text: #9ca3af;
     --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
+    --bg: #0f172a;
+    --border: #1e293b;
+    --code-bg: #1e293b;
     --accent: #c084fc;
     --accent-bg: rgba(192, 132, 252, 0.15);
     --accent-border: rgba(192, 132, 252, 0.5);
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+
+    /* Theme variables for TransactRank Dark Mode */
+    --color-background-primary: #1e293b;
+    --color-background-secondary: #0f172a;
+    --color-border-secondary: #334155;
+    --color-border-tertiary: #1e293b;
+
+    --color-text-primary: #f8fafc;
+    --color-text-secondary: #cbd5e1;
+    --color-text-tertiary: #64748b;
+
+    --color-background-info: rgba(56, 189, 248, 0.15);
+    --color-border-info: #38bdf8;
+    --color-text-info: #38bdf8;
+
+    --color-background-success: rgba(74, 222, 128, 0.15);
+    --color-border-success: #4ade80;
+    --color-text-success: #4ade80;
+
+    --color-background-warning: rgba(250, 204, 21, 0.15);
+    --color-border-warning: #facc15;
+    --color-text-warning: #facc15;
+
+    --color-background-danger: rgba(248, 113, 113, 0.15);
+    --color-border-danger: #f87171;
+    --color-text-danger: #f87171;
   }
 
   #social .button-icon {
