@@ -27,13 +27,14 @@ def _get_engine():
     
     connect_args = {}
     if "sslmode" in query_params:
-        sslmode = query_params.pop("sslmode")[0]
+        sslmode = query_params.get("sslmode")[0]
         if sslmode in ("require", "verify-ca", "verify-full"):
             # asyncpg uses 'ssl' instead of 'sslmode'
             connect_args["ssl"] = True
             
-    new_query = urllib.parse.urlencode(query_params, doseq=True)
-    clean_url = urllib.parse.urlunparse(parsed._replace(query=new_query))
+    # Clear all query parameters from the URL so SQLAlchemy doesn't 
+    # forward unsupported arguments (like channel_binding) to asyncpg.
+    clean_url = urllib.parse.urlunparse(parsed._replace(query=""))
     
     return create_async_engine(
         clean_url,
