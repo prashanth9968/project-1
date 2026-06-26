@@ -116,7 +116,7 @@ router = APIRouter()
 
 @router.get("/ranking", summary="Get global user rankings")
 async def global_ranking():
-    from app.storage import storage
-    stats = await storage.get_all_user_stats()
+    from app.storage import get_all_user_stats
+    stats = await get_all_user_stats()
     # Change get_global_ranking to compute_rankings here:
     return compute_rankings(stats)

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.storage import storage
+from app.storage import get_user_summary
 
 router = APIRouter()
 
@@ -16,7 +16,7 @@ Returns **404** if the user has no recorded transactions.
 """,
 )
 async def get_summary(user_id: str) -> dict:
-    summary = await storage.get_user_summary(user_id)
+    summary = await get_user_summary(user_id)
     if summary is None:
         raise HTTPException(
             status_code=404,

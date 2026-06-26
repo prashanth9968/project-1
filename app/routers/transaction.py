@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, status
 
 from app.models import TransactionRequest, TransactionResponse
-from app.storage import RateLimitExceeded, storage
+from app.storage import RateLimitExceeded, add_transaction
 
 router = APIRouter()
 
@@ -43,7 +43,7 @@ async def post_transaction(body: TransactionRequest) -> TransactionResponse:
     }
 
     try:
-        result = await storage.add_transaction(txn_data)
+        result = await add_transaction(txn_data)
     except RateLimitExceeded as exc:
         raise HTTPException(status_code=429, detail=str(exc))
 
